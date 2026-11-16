@@ -445,9 +445,11 @@ function render() {
         yearRows.forEach(r => {
           if (r.kind === "topup") {
             const isOut = r.amount < 0;
-            html += '<div class="step-row topup">' +
-              '<div class="step-num">' + (isOut ? "−" : "+") + '</div>' +
-              '<div class="step-body"><div class="step-main"><span class="badge topup">' +
+            const rowCls = isOut ? "topup-out" : "topup-in";
+            const badgeCls = isOut ? "topup-out" : "topup-in";
+            html += '<div class="step-row ' + rowCls + '">' +
+              '<div class="step-num">' + (isOut ? "↓" : "↑") + '</div>' +
+              '<div class="step-body"><div class="step-main"><span class="badge ' + badgeCls + '">' +
               (isOut ? "Вывод" : "Пополнение") + '</span> ' + formatMoney(Math.abs(r.amount)) +
               '</div><div class="step-meta">' + r.date + '</div></div>' +
               '<div class="step-right">' + formatMoney(r.end) + '</div></div>';
@@ -627,21 +629,44 @@ async function init() {
   });
   document.getElementById("btn-save-params").addEventListener("click", saveParams);
 
-  let moneyMode = null;
-  const moneyForm = document.getElementById("money-form");
+  let moneyMode = "deposit";
+  const cashModal = document.getElementById("cash-modal");
   const moneyInput = document.getElementById("money-input");
-  function openMoney(mode) {
-    moneyMode = mode;
-    moneyForm.classList.remove("hidden");
-    document.getElementById("money-form-title").textContent = mode === "deposit" ? "Пополнение" : "Вывод средств";
-    document.getElementById("money-form-hint").textContent = mode === "deposit"
-      ? "Сумма добавится сегодня. % со следующего шага — от нового капитала."
-      : "Сумма спишется с капитала сегодня.";
+
+  function openCashModal() {
+    moneyMode = "deposit";
+    document.querySelectorAll(".cash-mode").forEach(b => {
+      b.classList.toggle("active", b.dataset.mode === "deposit");
+    });
+    document.getElementById("money-form-hint").textContent =
+      "Сумма добавится сегодня. % со следующего шага — от нового капитала.";
     moneyInput.value = "";
-    moneyInput.focus();
+    cashModal.classList.remove("hidden");
+    cashModal.setAttribute("aria-hidden", "false");
+    setTimeout(() => moneyInput.focus(), 120);
   }
-  document.getElementById("btn-show-deposit").addEventListener("click", () => openMoney("deposit"));
-  document.getElementById("btn-show-withdraw").addEventListener("click", () => openMoney("withdraw"));
+  function closeCashModal() {
+    cashModal.classList.add("hidden");
+    cashModal.setAttribute("aria-hidden", "true");
+    moneyInput.value = "";
+    moneyInput.blur();
+  }
+
+  document.getElementById("btn-cash").addEventListener("click", openCashModal);
+  document.getElementById("cash-modal-backdrop").addEventListener("click", closeCashModal);
+  document.getElementById("btn-money-cancel").addEventListener("click", closeCashModal);
+
+  document.querySelectorAll(".cash-mode").forEach(btn => {
+    btn.addEventListener("click", () => {
+      moneyMode = btn.dataset.mode;
+      document.querySelectorAll(".cash-mode").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("money-form-hint").textContent = moneyMode === "deposit"
+        ? "Сумма добавится сегодня. % со следующего шага — от нового капитала."
+        : "Сумма спишется с капитала сегодня.";
+    });
+  });
+
   document.getElementById("btn-money-confirm").addEventListener("click", () => {
     const amount = Number(moneyInput.value);
     if (!moneyInput.value || isNaN(amount) || amount <= 0) return alert("Введи сумму");
@@ -654,8 +679,7 @@ async function init() {
       state.topUps = state.topUps || [];
       state.topUps.push({ id: uid(), date: todayISO(), amount: amount });
     }
-    moneyInput.value = "";
-    moneyForm.classList.add("hidden");
+    closeCashModal();
     saveData(state);
     haptic("medium");
     render();
